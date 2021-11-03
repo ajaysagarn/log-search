@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package com.ajsa.grpcproto;
+
+service LogSearchService{
+  rpc searchLogs (lambdaRequest) returns (lambdaResponse) {}
+}
+
+message Input{
+  string st = 1;
+  string et = 2;
+  string pattern = 3;
+}
+
+message lambdaRequest{
+  string type = 1;
+  Input input = 2;
+}
+
+message lambdaResponse{
+  string status = 1;
+  string message = 2;
+}
