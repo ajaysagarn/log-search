@@ -1,20 +1,23 @@
 package com.ajsa.akka
 
-
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.javadsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives
-import com.ajsa.grpcproto.LambdaProto.{Input, lambdaRequest}
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import com.ajsa.grpcproto.LambdaProto.{Input, lambdaRequest, lambdaResponse}
+import com.ajsa.service.GrpcService
 import scalapb.json4s.JsonFormat
 import spray.json.{DefaultJsonProtocol, enrichAny}
 
-import scala.concurrent.Future
+import akka.http.scaladsl.model.ContentTypes._
+import akka.http.scaladsl.model.headers.`Content-Type`
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future}
 import scala.io.StdIn
 import scala.util.{Failure, Success}
-
 
 case class RestRequest(`type`: String,input: InputOptions)
 case class InputOptions(st:String,et:String,pattern:String)
@@ -23,7 +26,6 @@ case class InputOptions(st:String,et:String,pattern:String)
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val input = jsonFormat3(InputOptions)
   implicit val restFormat = jsonFormat2(RestRequest)
-
 }
 
 class HttpRoutingService extends Directives with JsonSupport {
@@ -33,10 +35,12 @@ class HttpRoutingService extends Directives with JsonSupport {
     // needed for the future flatMap/onComplete in the end
     implicit val executionContext = system.executionContext
 
+    val grpcService: GrpcService = new GrpcService
+
     val routes = concat(
       /**
        * Rest api exposed by the akka service that takes the message and communicates with lambda
-       * using grpc protobuf compiles classes
+       * using grpc protobuf compiled classes
        */
       path("grpc") {
         get {
@@ -46,15 +50,14 @@ class HttpRoutingService extends Directives with JsonSupport {
               val ip: Input = new Input(st,et)
               // construct a payload making use of the GRPC generated class lambdaRequest
               val payload:lambdaRequest = new lambdaRequest("GRPC",Option.apply(ip))
-              val request = HttpRequest(
-                method = HttpMethods.POST,
-                uri = "https://0x8ylnzku5.execute-api.us-west-2.amazonaws.com/dev/",
-                entity = JsonFormat.toJsonString(payload))
 
-              val responseFuture: Future[HttpResponse] = Http().singleRequest(request)
-              onComplete(responseFuture){
-                case Success(res) => complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, res.status.value  ))
-                case Failure(_)   =>complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, s"<h1>Error in Lambda function</h1>"))
+              // calling the service function created by extending the proto generated class
+              val response:Future[lambdaResponse] = grpcService.searchLogs(payload)
+
+              //Complete the request after grpc response is received from the service
+              onComplete(response){
+                case Success(value) => complete(value.status.toInt, List(`Content-Type`(`application/json`)), JsonFormat.toJsonString(value))
+                case Failure(ex)    => complete(StatusCodes.InternalServerError,List(`Content-Type`(`text/plain(UTF-8)`)), s"An error occurred: ${ex.getMessage}")
               }
             }
           }
@@ -62,12 +65,19 @@ class HttpRoutingService extends Directives with JsonSupport {
         }
       },
       {
+        /**
+         * Rest api exposed by the akka service that takes the message and communicates with lambda
+         * using a REST POST CALL
+         */
         path("rest" / "findLogPattern"){
           post{
             entity(as[RestRequest]){
               req =>{
+
+                // marshall the entity into the correct format for the api gateway
                 val entity = req.toJson.toString()
 
+                // send request to the api gateway
                 val request = HttpRequest(
                   method = HttpMethods.POST,
                   uri = "https://0x8ylnzku5.execute-api.us-west-2.amazonaws.com/dev/",
@@ -76,8 +86,13 @@ class HttpRoutingService extends Directives with JsonSupport {
                 val responseFuture: Future[HttpResponse] = Http().singleRequest(request)
 
                 onComplete(responseFuture){
-                  case Success(res) => complete(HttpEntity(ContentTypes.`application/json`, res.toString()  ))
-                  case Failure(_)   =>complete(HttpEntity(ContentTypes.`application/json`, s"<h1>Error in Lambda function</h1>"))
+                  case Success(res) => {
+                    val responseAsString: Future[String] = Unmarshal(res.entity).to[String]
+                    onComplete(responseAsString){
+                      enty => complete(res.status.intValue(), List(`Content-Type`(`application/json`)), enty.get)
+                    }
+                  }
+                  case Failure(ex)   => complete(StatusCodes.InternalServerError,List(`Content-Type`(`text/plain(UTF-8)`)), s"An error occurred: ${ex.getMessage}")
                 }
               }
             }
@@ -86,7 +101,7 @@ class HttpRoutingService extends Directives with JsonSupport {
       }
     )
 
-
+    // Starts the local server at port 8080
     val bindingFuture = Http().newServerAt("localhost", 8080).bind(routes)
 
     println(s"Server now online. Please navigate to http://localhost:8080/\nPress RETURN to stop...")
