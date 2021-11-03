@@ -5,7 +5,7 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.{GetObjectRequest, ListObjectsV2Request, S3Object}
 
-import java.io.InputStream
+import java.io.{BufferedReader, InputStream}
 import scala.util.matching.Regex
 
 /**
@@ -170,9 +170,9 @@ object LogSearchUtils {
    * @return
    */
   def checkTimeIntervalExistsBS(start:String, end:String, logs: List[String]): Int ={
-    val sm = LogSearchUtils.getLogMinutesElasped(start)
-    val em = LogSearchUtils.getLogMinutesElasped(end)
-    defBinarySearchLogsRec(0,logs.size-1,sm.get,em.get,logs)
+    val sm = LogSearchUtils.getLogMinutesElasped(start).get
+    val em = sm + LogSearchUtils.getLogMinutesElasped(end).get
+    defBinarySearchLogsRec(0,logs.size-1,sm,em,logs)
   }
 
   /**
@@ -296,6 +296,83 @@ object LogSearchUtils {
     !pattern.findFirstIn(message).isEmpty
   }
 
+
+  /**
+   * Perform binary search without reading the entire file into a list /memory.
+   * Uses the file size in bytes received from s3 for the file to read the middle part of the file using a buffered reader
+   * The mid is continuously updated to a new byte position until a log is b=found or until the mid value goes out of bounds
+   * @param minTime
+   * @param duration
+   * @param br
+   * @param fileSize
+   * @return
+   */
+  def BinarySearchBufferedReader(minTime:String, duration:String, br:BufferedReader, fileSize: Long): Boolean = {
+    val st = getLogMinutesElasped(minTime).get
+    val et = st + getLogMinutesElasped(duration).get
+    br.mark(fileSize.asInstanceOf[Int])
+    recBinSearchBytes(0,fileSize,br,st,et,fileSize)
+  }
+
+  /**
+   * performs the bin search recursively
+   * @param min
+   * @param max
+   * @param br
+   * @param start
+   * @param end
+   * @param fileSize
+   * @return
+   */
+  def recBinSearchBytes(min:Long,max:Long,br:BufferedReader,start:Integer,end:Integer, fileSize: Long): Boolean = {
+
+    logger.info("Starting rec binary search")
+
+    val mid = (min + max)/2
+
+    logger.info("----new min---- = {}",min)
+    logger.info("----new max---- = {}",max)
+    logger.info("----new mid---- = {}",mid)
+
+
+    if((min > max) || (mid < 0) || (mid > fileSize)){
+      return false
+    }
+
+    val log = GetLogAtMidBytes(br,mid)
+    logger.info("---Log at mid -- = {}",log)
+    if(!log.isEmpty){
+      val midTime = getLogMinutesElasped(getLogTimeStamp(log.get).get).get
+
+      if(midTime >= start && midTime <=end){
+        return true
+      }else if(midTime < start){
+        return recBinSearchBytes(mid+1,max,br, start, end, fileSize)
+      } else if(midTime > end){
+        return recBinSearchBytes(min,mid-1,br, start, end, fileSize)
+      }
+    }
+    false
+  }
+
+  /**
+   * Get a log with timestamp from the position given by the number of bytes from the start of the file
+   * @param br
+   * @param bytesToMid
+   * @return
+   */
+  def GetLogAtMidBytes(br:BufferedReader, bytesToMid:Long): Option[String] = {
+    br.reset() // reset buffered reader to the marked starting position
+    br.skip(bytesToMid) //skip to the number of bytes specified by mid
+    val line = br.readLine() // read the line at the position
+
+    if(getLogTimeStamp(line).isEmpty){ //if the line read does not have a timestamp read the next line and return
+      return Option.apply(br.readLine())
+    }
+    Option.apply(line)
+  }
+
+
   /**
    * Check if the S3 input stream has logs within the given time range.
    * @param start - Start time
@@ -305,8 +382,9 @@ object LogSearchUtils {
    * @param logsInRange - the list of messages within the time range - will have only one message if getMessages is false
    * @return - List of messages that are present within the given time range
    */
+    @deprecated("Not being used...O(N) method")
   def checkTimeIntervalExists(start:String, end:String, file: Iterator[String], getMessages:Boolean, logsInRange: List[String] ): List[String] ={
-    //print("Started Time interval check")
+
     if(!file.hasNext){
       return logsInRange
     }
