@@ -80,7 +80,7 @@ The above two implentations can be found in [LogSearchUtils](https://github.com/
 
 ### Akka service API specification: 
 
-The Akka service runs locally with exposes to REST API that function as a wrapper around the api gateway endpoint.
+The Akka service runs locally which exposes two REST API that function as a wrapper around the API gateway endpoint.
 
     GET /grpc?st=00:24&et=00:05
     POST /rest/findLogPattern
