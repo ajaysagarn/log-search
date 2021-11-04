@@ -136,15 +136,6 @@ object LogSearchUtils {
     }
   }
 
-  /**
-   * Retreive the message part of the log
-   * @param messages
-   * @param pattern
-   * @return - String - message
-   */
-  def getMatchingMessages(messages:List[String], pattern:String): List[String] = {
-    List.empty[String]
-  }
 
   /**
    * Get the file name for the first file present under the given s3 bucket.

@@ -7,10 +7,10 @@
 
 ## Running this project
 
-This project consists of multiple sub modules that make up the overall root module. There are 3 modules namely
+This project consists of multiple sub-modules that make up the overall root module. There are 3 modules namely
 1. GrpcRestLambda : A scala project that implements a lambda function which can handle requests in both GRPC as well as REST style.
 2. GrpcProto: A scala module that consists of the protobuf file. Compiling this project generated the required classes from the protobuf.
-3. AkkaService: An Akka service that implements two REST API calls that functions as a wrapper on the client side to redirects any requests to the AWS API gateway.
+3. AkkaService: An Akka service that implements two REST API calls that functions as a wrapper on the client side to re-directs any requests to the AWS API gateway.
 
 Below are the steps that need to be followed in order to run the project
 1. Open the command prompt/terminal at the root directory of the project and run the command ``sbt clean compile``.
@@ -35,9 +35,17 @@ This will compile all the modules in the project
 4. Once create a directive and add a POST method to the api.
 5. Under the POST-setup select integration type to be Lambda Function, check 'Use Lambda Proxy integration'.
 6. Enter the URN of the lambda function in the field and click on create.
-7. Next under action click on Deploy API to deploy the api publically
+7. Next under action click on Deploy API to deploy the api publicly
 
-Once the above steps are complete. A unique api url will be provide using which post calls can be made to the lambda function via the API gateway.
+Once the above steps are complete. A unique api url will be provided using which post calls can be made to the lambda function via the API gateway.
+
+#### Test Cases
+
+Test cases have been written to test several util function used by the GrpcRestLambda module.
+1. To run tests open terminal in the project directory.
+2. run `sbt GrpcRestLambda/test`.
+3. check the status of all executed test cases.
+
 
 [Implementation Details](./docs/implementation.md)
 
