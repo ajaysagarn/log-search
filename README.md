@@ -1,9 +1,6 @@
-# Homework 3
+### Log Search
 
-### Ajay Sagar Nandimandalam
-### UIN: 659867916
-
-### The goal of this project is to gain experience with solving a distributed computational problem using cloud computing technologies by designing and implementing a RESTful service and a lambda function that are accessed from clients using gRPC.
+### This project implements a distributed cloud pipeline to search for logs that are constantly being udated to S3 storage, and filter logs with specific characterteristics such as time intervals and Log Levels.
 
 ## Running this project
 
