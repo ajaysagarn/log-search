@@ -22,7 +22,7 @@ Grading Criteria:
 	* program does not crash: -0%
  - the documentation exists but it is insufficient to understand your program design and models and how you assembled and deployed all components of your solution: up to 5% lost;
 	* documentation present: -0%
-
+ - Protobuf used: +2%
 	
-Total Grade: 7.75%
+Total Grade: 9.75%
 Comments: Great video. I found that you used print statements instead of logging, but overall excellent job. 
